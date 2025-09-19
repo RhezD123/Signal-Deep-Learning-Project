@@ -1,0 +1,106 @@
+clc,clearvars;
+%Load Data Set
+
+folder = ['download this file and copy folder path here: https://www.mathworks.com/supportfiles/spc/SpectrumSensing/SpectrumSensingCapturedData256x256_2025.zip'];
+imds = imageDatastore(folder);
+
+labels = strings(length(imds.Files),1);
+
+% see first letters and see the number then classify
+for i = 1:length(imds.Files)
+    [~,filename,~] = fileparts(imds.Files{i});
+    splitter = split(filename,'_');
+    finder = splitter{1};
+     if startsWith(finder,'b','IgnoreCase',true)
+         labels(i) = "WLAN";
+         continue
+     end
+     regexer = regexp(finder,'CF(\d+)MHz','tokens');
+    
+    if ~isempty(regexer)
+        finderdouble = str2double(regexer{1}{1});
+    else
+        finderdouble = NaN;
+    end
+   
+    if ~isnan(finderdouble)
+    if finderdouble == 3550
+       labels(i) = "NR";
+    elseif finderdouble == 2140 || finderdouble == 1800 || ...
+       finderdouble == 950  || finderdouble == 800
+       labels(i) = "LTE";
+    elseif finderdouble == 2400 || finderdouble == 5680
+       labels(i) = "WLAN";
+    else
+       labels(i) = "Unknown";   % should not happen if dataset is clean
+    end
+    end
+
+end
+
+imds = imageDatastore(folder,'IncludeSubfolders',true);
+imds.Labels = categorical(labels);
+
+imds = imageDatastore(folder,'IncludeSubfolders',true);
+imds.Labels = categorical(labels);
+
+%Split Data
+[imdsTrain, imdsVal] = splitEachLabel(imds,0.8,'randomized');
+imdsTrainaug = augmentedImageDatastore([256 256 1], imdsTrain,...
+    'ColorPreprocessing','gray2rgb');
+imdsValaug = augmentedImageDatastore([256 256 1], imdsVal,...
+    'ColorPreprocessing','gray2rgb');
+
+%Picture Size and Classes
+picsize = [256 256 3];
+numClass = numel(categories(imdsTrain.Labels));
+
+%CNN Layers
+layers = [
+    imageInputLayer(picsize)
+
+    convolution2dLayer(3,16,'Padding','same')
+    batchNormalizationLayer
+    reluLayer
+    maxPooling2dLayer(2,'Stride',2)
+
+    convolution2dLayer(3,32,'Padding','same')
+    batchNormalizationLayer
+    reluLayer
+    maxPooling2dLayer(2,'Stride',2)
+
+    convolution2dLayer(3,64,'Padding','same')
+    batchNormalizationLayer
+    reluLayer
+    maxPooling2dLayer(2,'Stride',2)
+
+    fullyConnectedLayer(128)
+    reluLayer
+    dropoutLayer(0.5)
+
+    fullyConnectedLayer(numClass)
+    softmaxLayer
+    classificationLayer
+    ];
+
+%Training Stuff
+trainoptions = trainingOptions("sgdm",...
+    MaxEpochs=20, ...
+    MiniBatchSize=64, ...
+    Plots="training-progress");
+
+options = trainingOptions("sgdm", ...
+    ExecutionEnvironment="gpu", ...
+    InitialLearnRate=0.01, ...           
+    LearnRateSchedule="piecewise", ...
+    LearnRateDropFactor=0.2, ...
+    LearnRateDropPeriod=5, ...
+    MaxEpochs=20, ...
+    MiniBatchSize=64, ...
+    Shuffle="every-epoch", ...
+    ValidationData=imdsValaug, ...   
+    ValidationFrequency=30, ...
+    Plots="training-progress", ...
+    Verbose=true);
+
+net = trainNetwork(imdsTrainaug,layers,options);

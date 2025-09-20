@@ -6,4 +6,4 @@ knowledge.
 
 This is the MathWorks website: https://www.mathworks.com/help/comm/ug/spectrum-sensing-with-deep-learning-to-identify-5g-and-lte-signals.html
 
-This website is also where I got the data from (You can find the link to download the dataset in the Training script file.
+This website is also where I got the data from (You can find the link to download the dataset in the Training script file).
